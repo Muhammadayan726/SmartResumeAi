@@ -44,7 +44,11 @@ export default function Login({ isSignup = false }: { isSignup?: boolean }) {
       
       navigate("/dashboard");
     } catch (error: any) {
-      setError(error.message);
+      if (error.code === "auth/unauthorized-domain") {
+        setError("Domain not authorized. Please add this domain to your Firebase Console under Authentication > Settings > Authorized domains.");
+      } else {
+        setError(error.message);
+      }
     }
   };
 
