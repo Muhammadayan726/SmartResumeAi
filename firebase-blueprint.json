@@ -1,0 +1,68 @@
+ {
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and subscription data",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "subscription": { "type": "string", "enum": ["free", "premium"] },
+        "status": { "type": "string", "enum": ["active", "blocked"] },
+        "emailVerified": { "type": "boolean" },
+        "subscriptionExpires": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "isAdmin": { "type": "boolean" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Resume": {
+      "title": "Resume",
+      "description": "Resume content and metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "object" },
+        "templateId": { "type": "string" },
+        "atsScore": { "type": "number" },
+        "lastModified": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Payment records for manual and automatic methods",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "method": { "type": "string", "enum": ["jazzcash", "easypaisa", "stripe", "paypal"] },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "verified", "rejected"] },
+        "transactionId": { "type": "string" },
+        "screenshotUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "amount", "method", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/resumes/{resumeId}": {
+      "schema": "Resume",
+      "description": "All resumes"
+    },
+    "/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Payment transactions"
+    }
+  }
+}

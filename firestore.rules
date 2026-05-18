@@ -1,0 +1,65 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn(); }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isAdmin() { 
+      return isSignedIn() && request.auth.token.email == "03004292351muhammadayan@gmail.com"; 
+    }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // Users Collection
+    match /users/{userId} {
+      function isValidUser(data) {
+        return (data.uid == request.auth.uid || isAdmin()) &&
+               (data.email is string && data.email.size() <= 256);
+      }
+
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(request.resource.data);
+      allow update: if (isOwner(userId) || isAdmin()) && 
+                      (isAdmin() || 
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt', 'subscription', 'planActivatedAt', 'status', 'email', 'uid']));
+      allow delete: if isAdmin();
+    }
+
+    // Resumes Collection
+    match /resumes/{resumeId} {
+      function isValidResume(data) {
+        return data.keys().hasAll(['userId', 'title', 'content', 'updatedAt']) &&
+               data.userId == request.auth.uid &&
+               data.title is string && data.title.size() <= 200 &&
+               data.updatedAt == request.time;
+      }
+
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow get: if isValidId(resumeId) && isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidResume(request.resource.data) && 
+                      (!request.resource.data.keys().has('createdAt') || request.resource.data.createdAt == request.time);
+      allow update: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin()) && 
+                      isValidId(resumeId) && isValidResume(request.resource.data) &&
+                      request.resource.data.userId == resource.data.userId; // userId is immutable
+      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin()) && isValidId(resumeId);
+    }
+
+    // Payments Collection
+    match /payments/{paymentId} {
+      allow list: if isAdmin();
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid && (
+                      request.resource.data.keys().hasAll(['userId', 'amount', 'transactionId', 'status', 'createdAt', 'fullName', 'screenshotUrl']) &&
+                      request.resource.data.status == 'pending' &&
+                      request.resource.data.createdAt == request.time
+                    );
+      allow update: if isAdmin() && isValidId(paymentId);
+    }
+  }
+}
