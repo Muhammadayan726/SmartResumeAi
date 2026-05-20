@@ -273,7 +273,11 @@ export default function Login({ isSignup = false }: { isSignup?: boolean }) {
           navigate("/pricing");
         }
       } else {
-        await sendPasswordResetEmail(auth, email);
+        const actionCodeSettings = {
+          url: window.location.origin + '/verify-email',
+          handleCodeInApp: true,
+        };
+        await sendPasswordResetEmail(auth, email, actionCodeSettings);
         setMessage("Password reset email sent! Check your inbox.");
       }
     } catch (error: any) {

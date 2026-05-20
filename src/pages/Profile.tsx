@@ -55,10 +55,20 @@ export default function Profile() {
   const handleVerifyEmail = async () => {
     if (!user) return;
     try {
-      await sendEmailVerification(user);
+      const actionCodeSettings = {
+        url: window.location.origin + '/verify-email',
+        handleCodeInApp: true,
+      };
+      await sendEmailVerification(user, actionCodeSettings);
       setMessage({ type: "success", text: "Verification email sent! Please check your inbox." });
     } catch (error: any) {
-      setMessage({ type: "error", text: error.message });
+      console.warn("In-app verification link failed to send or redirect: ", error);
+      try {
+        await sendEmailVerification(user);
+        setMessage({ type: "success", text: "Verification email sent! Please check your inbox." });
+      } catch (sdkErr: any) {
+        setMessage({ type: "error", text: sdkErr.message });
+      }
     }
   };
 
@@ -137,8 +147,8 @@ export default function Profile() {
                     <Mail className="w-5 h-5 text-amber-600" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-amber-900 mb-1">Verify your email</h3>
-                    <p className="text-amber-700 mb-6 font-medium">Please confirm your email address to secure your account.</p>
+                    <h3 className="text-lg font-bold text-amber-900 mb-1">Verify Email</h3>
+                    <p className="text-amber-700 mb-6 font-medium">Confirm your email address to secure your account. Click below to resend the verification link.</p>
                     <button 
                       onClick={handleVerifyEmail}
                       className="bg-amber-600 text-white px-6 py-3 rounded-xl text-sm font-bold hover:bg-amber-700 transition-all"
