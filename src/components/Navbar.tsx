@@ -93,12 +93,21 @@ export default function Navbar() {
           {/* Mobile menu button hidden because of MobileNav */}
           <div className="md:hidden flex items-center gap-3">
             {user && (
-              <Link to="/profile" className={cn(
-                "w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center overflow-hidden border border-indigo-100",
-                isPremium && "ring-2 ring-amber-400 border-amber-200"
-              )}>
-                <img src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName || user.email}&background=6366f1&color=fff`} alt="Profile" className="w-full h-full object-cover" />
-              </Link>
+              <>
+                <button 
+                  onClick={handleLogout}
+                  className="p-2.5 bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-600 rounded-xl transition-all shadow-sm active:scale-95"
+                  title="Logout"
+                >
+                  <LogOut className="w-5 h-5" />
+                </button>
+                <Link to="/profile" className={cn(
+                  "w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center overflow-hidden border border-indigo-100",
+                  isPremium && "ring-2 ring-amber-400 border-amber-200"
+                )}>
+                  <img src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName || user.email}&background=6366f1&color=fff`} alt="Profile" className="w-full h-full object-cover" />
+                </Link>
+              </>
             )}
           </div>
         </div>

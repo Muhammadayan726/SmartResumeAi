@@ -92,6 +92,7 @@ const SECTION_LABELS: Record<string, { label: string, icon: any }> = {
 import { usePremiumStatus } from "../hooks/usePremiumStatus";
 import { Crown, Lock } from "lucide-react";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
+import PremiumRestrictionModal from "../components/PremiumRestrictionModal";
 
 // ... (keep types and labels)
 
@@ -117,6 +118,8 @@ export default function Builder() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { isPremium, loading: planLoading, hasPlan } = usePremiumStatus();
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [premiumFeatureName, setPremiumFeatureName] = useState("");
 
   // Onboarding guard
   useEffect(() => {
@@ -142,6 +145,25 @@ export default function Builder() {
   const [showAddSection, setShowAddSection] = useState(false);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Security guard for direct URL premium template bypass check
+  useEffect(() => {
+    if (planLoading) return;
+
+    const PREMIUM_TEMPLATES = ["tech", "creative", "executive", "professional", "designer"];
+    const isPremiumTemplate = PREMIUM_TEMPLATES.includes(currentTemplate);
+    const isPreview = window.location.search.includes("preview=true");
+
+    if (isPremiumTemplate && !isPremium) {
+      if (!isPreview) {
+        // Direct bypass blocked! Prevent editor access with premium template.
+        navigate("/templates");
+      } else {
+        // Force preview mode to be consistently true for free users
+        setIsPreviewMode(true);
+      }
+    }
+  }, [currentTemplate, isPremium, planLoading, navigate]);
 
   // Initialize data
   useEffect(() => {
@@ -252,7 +274,8 @@ export default function Builder() {
 
   const handleAiGenerateSummary = async () => {
     if (!isPremium) {
-      navigate("/pricing");
+      setPremiumFeatureName("AI Summary Generator");
+      setShowPremiumModal(true);
       return;
     }
     const personalSection = content.sections.find(s => s.type === 'personal');
@@ -291,6 +314,12 @@ export default function Builder() {
   };
 
   const handleDownload = async () => {
+    const isPremiumTemplate = ["tech", "creative", "executive", "professional", "designer"].includes(currentTemplate);
+    if (isPremiumTemplate && !isPremium) {
+      setPremiumFeatureName("Premium Template Downloads");
+      setShowPremiumModal(true);
+      return;
+    }
     const element = document.getElementById("resume-preview");
     if (!element) return;
     
@@ -339,7 +368,8 @@ export default function Builder() {
 
   const handleAiJobMatch = async () => {
     if (!isPremium) {
-      navigate("/pricing");
+      setPremiumFeatureName("AI Match Analysis");
+      setShowPremiumModal(true);
       return;
     }
     if (!jd.trim()) return;
@@ -415,7 +445,12 @@ export default function Builder() {
   };
 
   const togglePreviewMode = () => {
-    setIsPreviewMode(!isPreviewMode);
+    const isPremiumTemplate = ["tech", "creative", "executive", "professional", "designer"].includes(currentTemplate);
+    if (isPremiumTemplate && !isPremium) {
+      navigate("/templates");
+    } else {
+      setIsPreviewMode(!isPreviewMode);
+    }
   };
 
   const updateSectionData = (sectionId: string, newData: any) => {
@@ -505,7 +540,14 @@ export default function Builder() {
               className="absolute top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-auto"
             >
               <button 
-                onClick={() => setIsPreviewMode(false)}
+                onClick={() => {
+                  const isPremiumTemplate = ["tech", "creative", "executive", "professional", "designer"].includes(currentTemplate);
+                  if (isPremiumTemplate && !isPremium) {
+                    navigate("/templates");
+                  } else {
+                    setIsPreviewMode(false);
+                  }
+                }}
                 className="bg-slate-900 text-white px-6 py-3 rounded-full font-bold shadow-2xl flex items-center gap-2 hover:bg-indigo-600 transition-all active:scale-95"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -531,7 +573,14 @@ export default function Builder() {
               <LayoutIcon className="w-6 h-6" />
             </button>
             <button 
-              onClick={() => setActiveTab("ai")}
+              onClick={() => {
+                if (!isPremium) {
+                  setPremiumFeatureName("AI Assistant");
+                  setShowPremiumModal(true);
+                } else {
+                  setActiveTab("ai");
+                }
+              }}
               className={cn("p-3 rounded-xl transition-all", activeTab === "ai" ? "bg-indigo-50 text-indigo-600" : "text-slate-400 hover:text-slate-600")}
             >
               <Sparkles className="w-6 h-6" />
@@ -832,27 +881,40 @@ export default function Builder() {
                       {[
                         { id: "modern", name: "Modern", color: "bg-indigo-600" },
                         { id: "minimal", name: "Minimal", color: "bg-slate-900" },
-                        { id: "tech", name: "Tech", color: "bg-emerald-600" },
-                        { id: "creative", name: "Creative", color: "bg-fuchsia-600" },
-                        { id: "executive", name: "Executive", color: "bg-amber-600" },
+                        { id: "tech", name: "Tech", color: "bg-emerald-600", premium: true },
+                        { id: "creative", name: "Creative", color: "bg-fuchsia-600", premium: true },
+                        { id: "executive", name: "Executive", color: "bg-amber-600", premium: true },
                         { id: "student", name: "Student", color: "bg-sky-600" },
-                        { id: "professional", name: "Corporate", color: "bg-slate-800" },
-                        { id: "designer", name: "Designer", color: "bg-rose-500" },
+                        { id: "professional", name: "Corporate", color: "bg-slate-800", premium: true },
+                        { id: "designer", name: "Designer", color: "bg-rose-500", premium: true },
                       ].map(tpl => (
                         <button 
                           key={tpl.id}
-                          onClick={() => setCurrentTemplate(tpl.id)}
+                          onClick={() => {
+                            if (tpl.premium && !isPremium) {
+                              setPremiumFeatureName(`${tpl.name} Template`);
+                              setShowPremiumModal(true);
+                            } else {
+                              setCurrentTemplate(tpl.id);
+                            }
+                          }}
                           className={cn(
-                            "flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all group",
+                            "flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all group relative",
                             currentTemplate === tpl.id ? "border-indigo-600 bg-indigo-50" : "border-slate-100 bg-slate-50 hover:border-slate-200"
                           )}
                         >
+                          {tpl.premium && !isPremium && (
+                            <div className="absolute top-2 right-2 bg-slate-900/80 backdrop-blur-sm text-white p-1 rounded-full z-10">
+                              <Lock className="w-3.5 h-3.5" />
+                            </div>
+                          )}
                           <div className={cn("w-full aspect-[3/4] rounded-lg shadow-sm group-hover:shadow-md transition-shadow flex items-center justify-center overflow-hidden relative")}>
                              <div className={cn("absolute inset-0 opacity-20", tpl.color)} />
                              <LayoutIcon className={cn("w-8 h-8", currentTemplate === tpl.id ? "text-indigo-600" : "text-slate-400")} />
                           </div>
-                          <span className={cn("text-[10px] font-black uppercase tracking-widest", currentTemplate === tpl.id ? "text-indigo-600" : "text-slate-500")}>
+                          <span className={cn("text-[10px] font-black uppercase tracking-widest flex items-center gap-1", currentTemplate === tpl.id ? "text-indigo-600" : "text-slate-500")}>
                             {tpl.name}
+                            {tpl.premium && <Crown className="w-3 h-3 text-amber-500 fill-current" />}
                           </span>
                         </button>
                       ))}
@@ -1197,6 +1259,12 @@ export default function Builder() {
           </div>
         </div>
       </div>
+
+      <PremiumRestrictionModal 
+        isOpen={showPremiumModal}
+        onClose={() => setShowPremiumModal(false)}
+        featureName={premiumFeatureName}
+      />
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }

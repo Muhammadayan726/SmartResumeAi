@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, Filter, Sparkles, Star, Layout, Eye, ArrowRight, X, Lock } from "lucide-react";
@@ -8,6 +8,8 @@ import { useAuthState } from "react-firebase-hooks/auth";
 import { auth } from "../lib/firebase";
 import { usePremiumStatus } from "../hooks/usePremiumStatus";
 import { Crown } from "lucide-react";
+import PremiumRestrictionModal from "../components/PremiumRestrictionModal";
+import { PremiumTemplateOptionsModal, UpgradeToPremiumModal, ActivateFreePlanModal } from "../components/PremiumTemplateModals";
 
 const TEMPLATE_CATEGORIES = [
   "All",
@@ -129,12 +131,23 @@ function TemplateThumbnail({ id }: { id: string }) {
 
 export default function Templates() {
   const [user] = useAuthState(auth);
-  const { isPremium } = usePremiumStatus();
+  const { isPremium, loading: planLoading, hasPlan } = usePremiumStatus();
   const navigate = useNavigate();
+
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showFilters, setShowFilters] = useState(false);
   const [filterType, setFilterType] = useState<"all" | "free" | "premium">("all");
+  
+  // Custom states for premium template handling
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [premiumFeatureName, setPremiumFeatureName] = useState("");
+  
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showActivationModal, setShowActivationModal] = useState(false);
+  const [activationMessage, setActivationMessage] = useState("");
+  const [selectedTemplate, setSelectedTemplate] = useState<typeof templates[0] | null>(null);
 
   const filteredTemplates = useMemo(() => {
     return templates.filter(tpl => {
@@ -153,12 +166,57 @@ export default function Templates() {
       return;
     }
 
+    if (!hasPlan) {
+      setActivationMessage("Please activate your Free Plan first.");
+      setShowActivationModal(true);
+      return;
+    }
+
     if (tpl.premium && !isPremium) {
-      navigate("/pricing");
+      setSelectedTemplate(tpl);
+      setShowUpgradeModal(true);
       return;
     }
 
     navigate(`/builder?template=${tpl.id}`);
+  };
+
+  const handlePreviewClick = (tpl: typeof templates[0], e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+
+    if (!hasPlan) {
+      setActivationMessage("Please activate your Free Plan first.");
+      setShowActivationModal(true);
+      return;
+    }
+
+    // Opens temporary preview only
+    navigate(`/builder?template=${tpl.id}&preview=true`);
+  };
+
+  const handleCardClick = (tpl: typeof templates[0]) => {
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+
+    if (!hasPlan) {
+      setActivationMessage("Please activate your Free Plan first.");
+      setShowActivationModal(true);
+      return;
+    }
+
+    if (tpl.premium && !isPremium) {
+      setSelectedTemplate(tpl);
+      setShowOptionsModal(true);
+      return;
+    }
+
+    handleUseTemplate(tpl);
   };
 
   return (
@@ -265,7 +323,8 @@ export default function Templates() {
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
                     transition={{ delay: i * 0.05 }}
-                    className="group bg-white rounded-[2.5rem] border border-slate-100 overflow-hidden hover:shadow-2xl hover:shadow-indigo-500/10 transition-all flex flex-col h-full relative"
+                    onClick={() => handleCardClick(tpl)}
+                    className="group bg-white rounded-[2.5rem] border border-slate-100 overflow-hidden hover:shadow-2xl hover:shadow-indigo-500/10 transition-all flex flex-col h-full relative cursor-pointer"
                   >
                     <div className="relative aspect-[3.5/4.5] overflow-hidden bg-slate-100">
                       <TemplateThumbnail id={tpl.id} />
@@ -273,17 +332,20 @@ export default function Templates() {
                       {/* Hover Overlay */}
                       <div className="absolute inset-0 bg-slate-950/80 opacity-0 group-hover:opacity-100 transition-all duration-500 flex flex-col items-center justify-center gap-4 backdrop-blur-[4px] p-8">
                          <h4 className="text-white text-xl font-black text-center mb-2 translate-y-4 group-hover:translate-y-0 transition-transform duration-500">{tpl.name}</h4>
-                         <Link 
-                          to={user ? `/builder?template=${tpl.id}&preview=true` : "/login"} 
-                          className="bg-white/10 text-white border border-white/20 px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:bg-white hover:text-slate-900 transition-all w-full justify-center active:scale-95"
+                         <button 
+                          onClick={(e) => handlePreviewClick(tpl, e)}
+                          className="bg-white/10 text-white border border-white/20 px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:bg-white hover:text-slate-900 transition-all w-full justify-center active:scale-95 cursor-pointer"
                          >
                            <Eye className="w-4 h-4" />
-                           Live Preview
-                         </Link>
+                           Preview
+                         </button>
                          <button 
-                          onClick={() => handleUseTemplate(tpl)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleUseTemplate(tpl);
+                          }}
                           className={cn(
-                            "px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all w-full justify-center active:scale-95",
+                            "px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all w-full justify-center active:scale-95 cursor-pointer",
                             tpl.premium && !isPremium ? "bg-amber-600 text-white hover:bg-amber-500" : "bg-indigo-600 text-white hover:bg-indigo-500"
                           )}
                          >
@@ -353,6 +415,31 @@ export default function Templates() {
             </div>
          </div>
       </section>
+
+      <PremiumRestrictionModal 
+        isOpen={showPremiumModal}
+        onClose={() => setShowPremiumModal(false)}
+        featureName={premiumFeatureName}
+      />
+
+      <PremiumTemplateOptionsModal
+        isOpen={showOptionsModal}
+        onClose={() => setShowOptionsModal(false)}
+        templateId={selectedTemplate?.id || ""}
+        templateName={selectedTemplate?.name || ""}
+      />
+
+      <UpgradeToPremiumModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        templateName={selectedTemplate?.name || ""}
+      />
+
+      <ActivateFreePlanModal
+        isOpen={showActivationModal}
+        onClose={() => setShowActivationModal(false)}
+        message={activationMessage}
+      />
     </div>
   );
 }

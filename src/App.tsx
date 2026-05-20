@@ -25,6 +25,7 @@ import VerifyEmail from "./pages/VerifyEmail";
 import Support from "./pages/Support";
 import Navbar from "./components/Navbar";
 import MobileNav from "./components/MobileNav";
+import PlanGuard from "./components/PlanGuard";
 
 // Protected Route Component
 const ProtectedRoute = ({ children, adminOnly = false }: { children: ReactNode; adminOnly?: boolean }) => {
@@ -118,7 +119,16 @@ export default function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Login isSignup />} />
-            <Route path="/templates" element={<Templates />} />
+            <Route 
+              path="/templates" 
+              element={
+                <ProtectedRoute>
+                  <PlanGuard>
+                    <Templates />
+                  </PlanGuard>
+                </ProtectedRoute>
+              } 
+            />
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/support" element={<Support />} />
@@ -134,7 +144,9 @@ export default function App() {
               path="/dashboard" 
               element={
                 <ProtectedRoute>
-                  <Dashboard />
+                  <PlanGuard>
+                    <Dashboard />
+                  </PlanGuard>
                 </ProtectedRoute>
               } 
             />
@@ -142,7 +154,9 @@ export default function App() {
               path="/resumes" 
               element={
                 <ProtectedRoute>
-                  <MyResumes />
+                  <PlanGuard>
+                    <MyResumes />
+                  </PlanGuard>
                 </ProtectedRoute>
               } 
             />
@@ -150,7 +164,9 @@ export default function App() {
               path="/builder/:id?" 
               element={
                 <ProtectedRoute>
-                  <Builder />
+                  <PlanGuard>
+                    <Builder />
+                  </PlanGuard>
                 </ProtectedRoute>
               } 
             />

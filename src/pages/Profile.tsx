@@ -1,17 +1,18 @@
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth, db } from "../lib/firebase";
-import { updateProfile, updateEmail, sendEmailVerification } from "firebase/auth";
+import { updateProfile, updateEmail, sendEmailVerification, signOut } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { useState, useEffect, type FormEvent } from "react";
-import { User, Mail, Shield, Save, Loader2, CheckCircle2, AlertCircle, Crown, Zap } from "lucide-react";
+import { User, Mail, Shield, Save, Loader2, CheckCircle2, AlertCircle, Crown, Zap, LogOut } from "lucide-react";
 import { motion } from "motion/react";
 import { cn } from "../lib/utils";
 import { usePremiumStatus } from "../hooks/usePremiumStatus";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 export default function Profile() {
   const [user] = useAuthState(auth);
   const { isPremium, loading: statusLoading } = usePremiumStatus();
+  const navigate = useNavigate();
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -197,6 +198,21 @@ export default function Profile() {
               <a href="mailto:03004292351muhammadayan@gmail.com" className="block text-center bg-white/10 hover:bg-white/20 py-4 rounded-xl text-sm font-bold transition-all">
                 Contact Support
               </a>
+            </div>
+
+            <div className="bg-white rounded-[2rem] border border-red-100 p-8 shadow-sm text-center">
+              <h3 className="text-lg font-bold text-slate-950 mb-2">Logout</h3>
+              <p className="text-slate-500 text-xs mb-6 font-medium">Ready to sign out of your active session?</p>
+              <button 
+                onClick={async () => {
+                  await signOut(auth);
+                  navigate("/");
+                }}
+                className="w-full py-4 bg-red-50 hover:bg-red-600 hover:text-white text-red-600 rounded-2xl text-xs font-black uppercase tracking-widest transition-all duration-300 active:scale-95 flex items-center justify-center gap-2"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign Out
+              </button>
             </div>
           </div>
         </div>

@@ -14,6 +14,10 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.email == "03004292351muhammadayan@gmail.com"; 
     }
     function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function isPremiumUser() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subscription == 'premium';
+    }
 
     // Users Collection
     match /users/{userId} {
@@ -27,17 +31,19 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(request.resource.data);
       allow update: if (isOwner(userId) || isAdmin()) && 
                       (isAdmin() || 
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt', 'subscription', 'planActivatedAt', 'status', 'email', 'uid']));
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt', 'subscription', 'planActivatedAt', 'status', 'email', 'uid', 'emailVerified']));
       allow delete: if isAdmin();
     }
 
     // Resumes Collection
     match /resumes/{resumeId} {
       function isValidResume(data) {
+        let isPremiumTemplate = data.keys().has('template') && data.template in ['tech', 'creative', 'executive', 'professional', 'designer'];
         return data.keys().hasAll(['userId', 'title', 'content', 'updatedAt']) &&
                data.userId == request.auth.uid &&
                data.title is string && data.title.size() <= 200 &&
-               data.updatedAt == request.time;
+               data.updatedAt == request.time &&
+               (!isPremiumTemplate || isPremiumUser() || isAdmin());
       }
 
       allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());

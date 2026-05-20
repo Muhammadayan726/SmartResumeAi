@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
-import { auth } from "../lib/firebase";
-import { applyActionCode, sendEmailVerification } from "firebase/auth";
+import { auth, db } from "../lib/firebase";
+import { applyActionCode, sendEmailVerification, onAuthStateChanged } from "firebase/auth";
+import { doc, updateDoc } from "firebase/firestore";
 import { motion, AnimatePresence } from "motion/react";
 import { CheckCircle2, XCircle, Loader2, Sparkles, ArrowRight, Mail } from "lucide-react";
 
@@ -17,8 +18,42 @@ export default function VerifyEmail() {
   const mode = searchParams.get("mode");
 
   useEffect(() => {
+    // 1. Instantly check if user is already logged in and verified (Self-healing redirection logic)
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        await user.reload();
+        if (user.emailVerified) {
+          setStatus("success");
+          try {
+            const userDocRef = doc(db, "users", user.uid);
+            await updateDoc(userDocRef, { emailVerified: true });
+          } catch (e) {
+            console.warn("Failed to update firestore profile verification flag:", e);
+          }
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
     const handleVerification = async () => {
       if (!oobCode || mode !== "verifyEmail") {
+        // Fallback: If no action link codes are in URL, double-check current user's actual verification flag
+        if (auth.currentUser) {
+          await auth.currentUser.reload();
+          if (auth.currentUser.emailVerified) {
+            setStatus("success");
+            try {
+              const userDocRef = doc(db, "users", auth.currentUser.uid);
+              await updateDoc(userDocRef, { emailVerified: true });
+            } catch (e) {
+              console.warn(e);
+            }
+            return;
+          }
+        }
         setStatus("error");
         setErrorMsg("Invalid verification link. Please check your email for the correct link.");
         return;
@@ -27,7 +62,25 @@ export default function VerifyEmail() {
       try {
         await applyActionCode(auth, oobCode);
         setStatus("success");
+        if (auth.currentUser) {
+          await auth.currentUser.reload();
+          try {
+            const userDocRef = doc(db, "users", auth.currentUser.uid);
+            await updateDoc(userDocRef, { emailVerified: true });
+          } catch (e) {
+            console.warn(e);
+          }
+        }
       } catch (err: any) {
+        // If applying the action code failed but user is already verified under reload, treat as success!
+        if (auth.currentUser) {
+          await auth.currentUser.reload();
+          if (auth.currentUser.emailVerified) {
+            setStatus("success");
+            return;
+          }
+        }
+
         setStatus("error");
         if (err.code === "auth/invalid-action-code") {
           setErrorMsg("This verification link is invalid or has already been used.");
@@ -56,7 +109,13 @@ export default function VerifyEmail() {
       await sendEmailVerification(auth.currentUser, actionCodeSettings);
       setResent(true);
     } catch (err: any) {
-      setErrorMsg("Could not resend verification email. Please try again later.");
+      console.warn("Retrying standard email send without custom origin...");
+      try {
+        await sendEmailVerification(auth.currentUser);
+        setResent(true);
+      } catch (stdErr: any) {
+        setErrorMsg("Could not resend verification email. Please try again later.");
+      }
     } finally {
       setResending(false);
     }
@@ -115,10 +174,10 @@ export default function VerifyEmail() {
 
               <div className="space-y-4">
                 <div className="space-y-2">
-                   <h1 className="text-3xl font-black text-slate-900">Email Verified!</h1>
-                   <p className="text-lg font-bold text-indigo-600">Welcome to SmartResume AI 🎉</p>
+                   <h1 className="text-3xl font-black text-slate-900 leading-tight">Congratulations!</h1>
+                   <p className="text-lg font-bold text-indigo-600">Your email has been verified successfully. 🎉</p>
                 </div>
-                <p className="text-slate-500 leading-relaxed">
+                <p className="text-slate-500 leading-relaxed text-sm">
                   Your identity has been successfully confirmed. You now have full access to our professional ecosystem.
                 </p>
               </div>
@@ -144,7 +203,7 @@ export default function VerifyEmail() {
                 onClick={() => navigate("/login")}
                 className="w-full h-16 bg-slate-950 text-white rounded-2xl font-black text-lg flex items-center justify-center gap-3 hover:bg-indigo-600 transition-all hover:shadow-xl hover:shadow-indigo-500/20 active:scale-95 group"
               >
-                Launch Dashboard
+                Login to SmartResume AI
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </button>
             </motion.div>

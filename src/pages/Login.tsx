@@ -24,14 +24,20 @@ export default function Login({ isSignup = false }: { isSignup?: boolean }) {
       
       // Check if user exists in Firestore
       const userDoc = await getDoc(doc(db, "users", user.uid));
-      if (!userDoc.exists()) {
+      let hasPlan = false;
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        if (data && (data.subscription === "free" || data.subscription === "premium")) {
+          hasPlan = true;
+        }
+      } else {
         try {
           await setDoc(doc(db, "users", user.uid), {
             uid: user.uid,
             email: user.email,
             displayName: user.displayName,
             photoURL: user.photoURL,
-            subscription: "free",
+            subscription: null,
             status: "active",
             emailVerified: user.emailVerified,
             createdAt: serverTimestamp(),
@@ -42,7 +48,11 @@ export default function Login({ isSignup = false }: { isSignup?: boolean }) {
         }
       }
       
-      navigate("/dashboard");
+      if (hasPlan) {
+        navigate("/dashboard");
+      } else {
+        navigate("/pricing");
+      }
     } catch (error: any) {
       if (error.code === "auth/unauthorized-domain") {
         setError("Domain not authorized. Please add this domain to your Firebase Console under Authentication > Settings > Authorized domains.");
@@ -71,7 +81,7 @@ export default function Login({ isSignup = false }: { isSignup?: boolean }) {
             uid: user.uid,
             email: user.email,
             displayName: name,
-            subscription: "free",
+            subscription: null,
             status: "active",
             emailVerified: false,
             createdAt: serverTimestamp(),
@@ -81,21 +91,46 @@ export default function Login({ isSignup = false }: { isSignup?: boolean }) {
           handleFirestoreError(err, OperationType.CREATE, `users/${user.uid}`);
         }
 
-        // Send verification email
-        const actionCodeSettings = {
-          url: window.location.origin + '/verify-email',
-          handleCodeInApp: true,
-        };
-        await sendEmailVerification(user, actionCodeSettings);
-        setMessage("Verification email sent! Please check your inbox.");
+        // Send verification email safely
+        let emailSent = false;
+        try {
+          const actionCodeSettings = {
+            url: window.location.origin + '/verify-email',
+            handleCodeInApp: true,
+          };
+          await sendEmailVerification(user, actionCodeSettings);
+          emailSent = true;
+        } catch (verifyErr: any) {
+          console.warn("In-app verification link failed to send: ", verifyErr);
+          try {
+            // Fallback to standard Firebase verification which doesn't check current origin configuration
+            await sendEmailVerification(user);
+            emailSent = true;
+          } catch (stdVerifyErr: any) {
+            console.error("Standard email verification failed too:", stdVerifyErr);
+          }
+        }
+
+        if (emailSent) {
+          setMessage("Account created and verification email sent! Please check your inbox.");
+        } else {
+          setMessage("Account created successfully! We couldn't deliver the verification email. You can verify your email later from your profile.");
+        }
         
         // Wait a bit so they can see the message before navigating
         setTimeout(() => {
-          navigate("/dashboard");
-        }, 2000);
+          navigate("/pricing");
+        }, 2500);
       } else if (mode === "login") {
-        await signInWithEmailAndPassword(auth, email, password);
-        navigate("/dashboard");
+        const result = await signInWithEmailAndPassword(auth, email, password);
+        const userDoc = await getDoc(doc(db, "users", result.user.uid));
+        const data = userDoc.exists() ? userDoc.data() : null;
+        const hasPlan = data && (data.subscription === "free" || data.subscription === "premium");
+        if (hasPlan) {
+          navigate("/dashboard");
+        } else {
+          navigate("/pricing");
+        }
       } else {
         await sendPasswordResetEmail(auth, email);
         setMessage("Password reset email sent! Check your inbox.");
@@ -114,7 +149,7 @@ export default function Login({ isSignup = false }: { isSignup?: boolean }) {
   };
 
   return (
-    <div className="min-h-[calc(100vh-64px)] flex bg-white overflow-hidden">
+    <div className="min-h-screen flex bg-white overflow-y-auto">
       {/* Left side - Visuals */}
       <div className="hidden lg:flex flex-1 bg-indigo-600 relative overflow-hidden flex-col justify-between p-12 text-white">
         <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl -mr-48 -mt-48" />
@@ -143,7 +178,7 @@ export default function Login({ isSignup = false }: { isSignup?: boolean }) {
       </div>
 
       {/* Right side - Form */}
-      <div className="flex-1 flex flex-col justify-center px-8 lg:px-24">
+      <div className="flex-1 flex flex-col justify-center px-4 sm:px-8 lg:px-24 py-10 md:py-16">
         <div className="max-w-md w-full mx-auto">
           <div className="mb-12">
             {mode === "forgot" && (

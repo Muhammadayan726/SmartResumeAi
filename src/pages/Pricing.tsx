@@ -67,9 +67,9 @@ const plans = [
 ];
 
 export default function Pricing() {
-  const [user] = useAuthState(auth);
+  const [user, authLoading] = useAuthState(auth);
   const navigate = useNavigate();
-  const { plan } = usePremiumStatus();
+  const { plan, hasPlan, loading: planLoading } = usePremiumStatus();
   const [selectedPlan, setSelectedPlan] = useState<{name: string, price: string} | null>(null);
   const [showConfirmFree, setShowConfirmFree] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -113,6 +113,25 @@ export default function Pricing() {
 
   return (
     <div className="bg-slate-50 min-h-screen py-24 px-8 lg:px-24">
+      {user && !planLoading && !hasPlan && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-4xl mx-auto mb-12 bg-amber-50 border border-amber-200 rounded-[2.5rem] p-8 text-amber-800 flex flex-col md:flex-row items-center gap-6 text-left shadow-xl shadow-amber-500/5 relative overflow-hidden"
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-amber-100/30 rounded-full blur-2xl" />
+          <div className="w-14 h-14 rounded-3xl bg-amber-100 flex items-center justify-center text-amber-600 flex-shrink-0 shadow-inner">
+            <Rocket className="w-7 h-7" />
+          </div>
+          <div>
+            <h4 className="font-extrabold text-lg text-slate-900">Choose a Plan to Get Started</h4>
+            <p className="text-sm text-slate-600 mt-1 leading-relaxed">
+              Before you can access the Dashboard, Templates, or Builder, you must choose either our <strong>Standard Free Plan</strong> or upgrade to the premium tier. Set up your blueprint below!
+            </p>
+          </div>
+        </motion.div>
+      )}
+
       <div className="max-w-7xl mx-auto text-center mb-20">
         <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-50 border border-indigo-100 rounded-full mb-6">
           <Sparkles className="w-4 h-4 text-indigo-600" />
@@ -171,7 +190,9 @@ export default function Pricing() {
                 planData.popular ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-xl" : "bg-slate-900 text-white hover:bg-slate-800"
               )}
             >
-              {(planData.name === "Free" && !!plan) || (planData.name === "Premium" && plan === "premium") ? "Current Plan" : planData.cta}
+              {planData.name === "Free" 
+                ? (plan ? "Current Plan" : "Activate Free Plan") 
+                : ((planData.name === "Premium" && plan === "premium") ? "Current Plan" : planData.cta)}
               <ArrowRight className="w-4 h-4" />
             </button>
           </motion.div>
@@ -199,9 +220,9 @@ export default function Pricing() {
               <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-6">
                 <Rocket className="w-10 h-10" />
               </div>
-              <h3 className="text-2xl font-black text-slate-900 mb-2">Activate Free Plan?</h3>
+              <h3 className="text-2xl font-black text-slate-900 mb-2">Activate Free Plan</h3>
               <p className="text-slate-500 mb-8 leading-relaxed">
-                Connect your account to our standard features. You can upgrade to Premium anytime for AI-powered optimization.
+                Are you sure you want to activate the Free Plan? Connect your account to our standard features.
               </p>
               <div className="flex gap-4">
                 <button 
@@ -215,7 +236,7 @@ export default function Pricing() {
                   disabled={activating}
                   className="flex-1 px-6 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all flex items-center justify-center"
                 >
-                  {activating ? <Loader2 className="w-5 h-5 animate-spin" /> : "Confirm Activation"}
+                  {activating ? <Loader2 className="w-5 h-5 animate-spin" /> : "Confirm"}
                 </button>
               </div>
             </motion.div>
@@ -232,9 +253,9 @@ export default function Pricing() {
               <div className="w-24 h-24 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-8">
                 <CheckCircle2 className="w-12 h-12" />
               </div>
-              <h3 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">🎉 Welcome Aboard!</h3>
+              <h3 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">🎉 Congratulations!</h3>
               <p className="text-slate-500 mb-8 text-lg font-serif italic">
-                Your Free Plan is now active. You have full access to our standard resume building tools.
+                Your Free Plan has been activated successfully.
               </p>
               <button 
                 onClick={() => navigate("/dashboard")}
