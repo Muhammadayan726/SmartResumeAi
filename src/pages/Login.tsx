@@ -1,8 +1,17 @@
-import { auth, googleProvider, db } from "../lib/firebase";
-import { signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, updateProfile, sendEmailVerification } from "firebase/auth";
+import { auth, googleProvider, githubProvider, db } from "../lib/firebase";
+import { 
+  signInWithPopup, 
+  signInWithRedirect, 
+  getRedirectResult,
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  sendPasswordResetEmail, 
+  updateProfile, 
+  sendEmailVerification 
+} from "firebase/auth";
 import { useNavigate, Link } from "react-router-dom";
 import { Sparkles, ArrowRight, Mail, Lock, User as UserIcon, Github, ChevronLeft } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { cn } from "../lib/utils";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
@@ -16,6 +25,138 @@ export default function Login({ isSignup = false }: { isSignup?: boolean }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+
+  // Handle getRedirectResult on load to support redirect flows
+  useEffect(() => {
+    let active = true;
+    const checkRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result && active) {
+          setLoading(true);
+          const user = result.user;
+          const userDoc = await getDoc(doc(db, "users", user.uid));
+          let hasPlan = false;
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            if (data && (data.subscription === "free" || data.subscription === "premium")) {
+              hasPlan = true;
+            }
+          } else {
+            try {
+              await setDoc(doc(db, "users", user.uid), {
+                uid: user.uid,
+                email: user.email,
+                displayName: user.displayName || user.email?.split("@")[0] || "User",
+                photoURL: user.photoURL,
+                subscription: null,
+                status: "active",
+                emailVerified: user.emailVerified,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+              });
+            } catch (err) {
+              handleFirestoreError(err, OperationType.CREATE, `users/${user.uid}`);
+            }
+          }
+          
+          if (hasPlan) {
+            navigate("/dashboard");
+          } else {
+            navigate("/pricing");
+          }
+        }
+      } catch (error: any) {
+        console.error("Redirect auth error:", error);
+        if (active) {
+          if (error.code === "auth/popup-closed-by-user") {
+            setError("Authentication popup was closed before completing sign in. Please try again.");
+          } else if (error.code === "auth/unauthorized-domain") {
+            setError("Domain not authorized. Please add this domain to your Firebase Console under Authentication > Settings > Authorized domains.");
+          } else {
+            setError(error.message);
+          }
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+    checkRedirect();
+    return () => {
+      active = false;
+    };
+  }, [navigate]);
+
+  const handleGithubLogin = async () => {
+    setError("");
+    setMessage("");
+    setLoading(true);
+    try {
+      const result = await signInWithPopup(auth, githubProvider);
+      const user = result.user;
+      
+      // Check if user exists in Firestore
+      const userDoc = await getDoc(doc(db, "users", user.uid));
+      let hasPlan = false;
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        if (data && (data.subscription === "free" || data.subscription === "premium")) {
+          hasPlan = true;
+        }
+      } else {
+        try {
+          await setDoc(doc(db, "users", user.uid), {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName || user.email?.split("@")[0] || "GitHub User",
+            photoURL: user.photoURL,
+            subscription: null,
+            status: "active",
+            emailVerified: user.emailVerified,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+        } catch (err) {
+          handleFirestoreError(err, OperationType.CREATE, `users/${user.uid}`);
+        }
+      }
+      
+      if (hasPlan) {
+        navigate("/dashboard");
+      } else {
+        navigate("/pricing");
+      }
+    } catch (error: any) {
+      console.error("Github login error:", error);
+      if (error.code === "auth/popup-closed-by-user") {
+        setError("Authentication popup was closed before completing sign in. Please try again.");
+      } else if (error.code === "auth/popup-blocked") {
+        setMessage("Popup blocked by your browser. Redirecting you to GitHub login...");
+        try {
+          await signInWithRedirect(auth, githubProvider);
+        } catch (redirectErr: any) {
+          setError(`Failed to redirect: ${redirectErr.message}`);
+        }
+      } else if (error.code === "auth/unauthorized-domain") {
+        setError("Domain not authorized. Please add this domain to your Firebase Console under Authentication > Settings > Authorized domains.");
+      } else {
+        // Offer redirect fallback for other failures/closed popup / browser quirks
+        setError(`${error.message || "Failed to authenticate via GitHub."}`);
+        setMessage("Attempting fallback redirect login in 3 seconds...");
+        setTimeout(async () => {
+          try {
+            await signInWithRedirect(auth, githubProvider);
+          } catch (redirectErr: any) {
+            setError(`Redirect fallback failed: ${redirectErr.message}`);
+          }
+        }, 3500);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleGoogleLogin = async () => {
     try {
@@ -210,7 +351,11 @@ export default function Login({ isSignup = false }: { isSignup?: boolean }) {
                   <img src="https://www.google.com/favicon.ico" className="w-4 h-4" alt="Google" />
                   Google
                 </button>
-                <button className="flex items-center justify-center gap-2 bg-slate-900 border border-slate-900 py-3.5 px-4 rounded-xl font-medium text-white hover:bg-slate-800 transition-all hover:shadow-lg active:scale-95 text-xs truncate">
+                <button 
+                  onClick={handleGithubLogin}
+                  disabled={loading}
+                  className="flex items-center justify-center gap-2 bg-slate-900 border border-slate-900 py-3.5 px-4 rounded-xl font-medium text-white hover:bg-slate-800 transition-all hover:shadow-lg active:scale-95 text-xs truncate disabled:opacity-50"
+                >
                   <Github className="w-4 h-4" />
                   GitHub
                 </button>
